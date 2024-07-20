@@ -8,7 +8,7 @@ import java.util.Locale;
 // de datas quanto moedas e números baseado na preferência do usuário ou na localização da JVM dele
 // Ela está dentro do pacote java.util, é uma classe que podemos criar, não é uma classe abstrata e ela tem a
 // possibilidade de trabalhar com diversos tipos de formatação
-public class LocalTest01 {
+public class LocaleTest01 {
     public static void main(String[] args) {
         // Ela segue o padrão de duas ISOS, um para definir a língua que você está falando, por exemplo o português é
         // representado pelo pt e o país Brasil é representado por BR, pt-BR
