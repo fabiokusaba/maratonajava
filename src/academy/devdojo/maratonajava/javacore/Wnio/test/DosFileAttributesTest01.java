@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.nio.file.attribute.DosFileAttributes;
 
+// Ambientes Windows
 public class DosFileAttributesTest01 {
     public static void main(String[] args) throws IOException {
         Path path = Paths.get("pasta/teste.txt");
