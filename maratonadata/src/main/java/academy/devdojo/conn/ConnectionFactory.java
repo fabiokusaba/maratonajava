@@ -14,19 +14,21 @@ public class ConnectionFactory {
     // Para montar uma conexão precisamos de algumas coisas: precisamos da url, usuário e a senha
     // A url é uma das partes mais importantes, a url vai possibilitar o DriverManager pegar uma conexão porque tem um
     // padrão os bancos de dados possuem um padrão de url
-    public static Connection getConnection() {
+    public static Connection getConnection() throws SQLException {
         String url = "jdbc:mysql://localhost:3307/anime_store";
         String username = "root";
         String password = "root";
 
         // E aí a gente precisa pegar a conexão, geralmente quando você está trabalhando com conexão você precisa tratar
         // exceção é algo que está além do poder do desenvolvedor
-        try {
-            Connection connection = DriverManager.getConnection(url, username, password);
-            System.out.println(connection);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        return null;
+//        try {
+//            return DriverManager.getConnection(url, username, password);
+//        } catch (SQLException e) {
+//            throw new RuntimeException(e);
+//        }
+
+        // Mudamos a abordagem e colocamos a exceção na assinatura do metodo
+        // Retornando a nossa conexão
+        return DriverManager.getConnection(url, username, password);
     }
 }
