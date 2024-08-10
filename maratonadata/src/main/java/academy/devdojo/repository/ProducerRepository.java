@@ -249,4 +249,211 @@ public class ProducerRepository {
             log.error("Error while trying to find producer by name", e);
         }
     }
+
+    // A primeira coisa que a gente precisa fazer é que quando a gente está criando o Statement a gente precisa falar aqui o 
+    // resultSetType que a gente quer trabalhar e a parte da concorrência, então agora a gente está criando um Statement com
+    // as características do ResultSet
+    public static void showTypeScrollWorking() {
+        String sql = "SELECT * FROM anime_store.producer;";
+        try (Connection conn = ConnectionFactory.getConnection();
+             Statement stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
+             ResultSet rs = stmt.executeQuery(sql)) {
+                // Agora que nós temos aqui o ResultSet digamos que você quer ir pra última linha para isso você pode chamar
+                // Baseado na sua query e não no estado do banco que você vê lá
+                log.info("Last row? '{}'", rs.last());
+
+                // Número da linha
+                log.info("Row number: '{}'", rs.getRow());
+                log.info(Producer.builder().id(rs.getInt("id")).name(rs.getString("name")).build());
+
+                // Primeira linha
+                log.info("First row? '{}'", rs.first());
+                log.info("Row number: '{}'", rs.getRow());
+                log.info(Producer.builder().id(rs.getInt("id")).name(rs.getString("name")).build());
+
+                // Linha específica
+                log.info("Row Absolute '{}'", rs.absolute(2));
+                log.info("Row number: '{}'", rs.getRow());
+                log.info(Producer.builder().id(rs.getInt("id")).name(rs.getString("name")).build());
+
+                // Trabalhando de forma relativa, digamos que eu quero voltar uma linha
+                log.info("Row relative? '{}'", rs.relative(-1));
+                log.info("Row number: '{}'", rs.getRow());
+                log.info(Producer.builder().id(rs.getInt("id")).name(rs.getString("name")).build());
+
+                // Se você quer saber onde você está sem você querer mover o cursor, por exemplo, quero saber se é a última ou quero
+                // saber se é a primeira
+                // O isLast ele verifica se é a última e ele não move o cursor
+                log.info("is last? '{}'", rs.isLast());
+                log.info("Row number: '{}'", rs.getRow());
+
+                // Da mesma forma que você tem o isLast você tem o isFirst
+                log.info("is first? '{}'", rs.isFirst());
+                log.info("Row number: '{}'", rs.getRow());
+
+                // E você tem o isBeforeFirst e o isAfterLast por que que é importante? Porque digamos assim que você quer ir pra última
+                // posição e digamos que eu quero ir de baixo pra cima agora e como eu faço pra ir de baixo pra cima? Utilizando um while
+                // vou fazer rs.previous e vou imprimir todo mundo aqi
+                log.info("Last row? '{}'", rs.last());
+                log.info("-------------------------");
+
+                // Eu estava na última fui mais uma
+                rs.next();
+
+                // E eu quero saber se está depois do fim da nossa tabelinha
+                // Como você pode ver agora está depois e quando eu falei vai pra trás ele pegou Studion Deen, NHK e MADHOUSE
+                log.info("After last row? '{}'", rs.isAfterLast());
+
+                // Como você pode ver nós temos o primeiro que é o NHK e depois nós temos o MADHOUSE como você pode ver a gente pulou o
+                // último e por que a gente pulou o último? Porque se você voltar aqui começando do último ele estava em Studio Deen falei
+                // previous ele moveu pra NHK e aí apareceu NHK e MADHOUSE, ou seja, ele pulou o último porque ele já estava na última 
+                // posição eu teria que ir pra uma posição mais a frente do último por isso você tem o isAfterLast
+                while (rs.previous()) {
+                    log.info(Producer.builder().id(rs.getInt("id")).name(rs.getString("name")).build());
+                }
+        } catch (SQLException e) {
+            log.error("Error while trying to find producer by name", e);
+        }
+    }
+
+    // Basicamente a gente vai procurar por um nome e o nome que a gente achar a gente vai fazer a atualização colocando ele em UpperCase
+    // sem criar um novo sql
+    // O método fica da mesma forma, mas como nós estamos criando um Statement que vai fazer uma atualização no banco de dados lembre-se que
+    // a gente precisa utilizar o ResultSet que é insensitive e updatable
+    public static List<Producer> findByNameAndUpdateToUpperCase(String name) {
+        log.info("Finding Producers by name");
+        String sql = "SELECT * FROM anime_store.producer WHERE name LIKE '%s';".formatted("%" + name + "%");
+        List<Producer> producers = new ArrayList<>();
+        try (Connection conn = ConnectionFactory.getConnection();
+             Statement stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
+             ResultSet rs = stmt.executeQuery(sql)) {
+            // O nome que você tem já está dentro da memória o ResultSet quando você executa a query ele traz aqueles dados para dentro da
+            // memória e você fica trabalhando com ele dentro da memória que é o que nós temos aqui
+            while (rs.next()) {
+                // A gente vai atualizar aqui em cima antes de criar esse cara nós vamos fazer o seguinte, então basicamente estou falando
+                // atualiza o ResultSet pega a coluna nome você pega o valor que você tem dentro daquela célula e coloca ele pra UpperCase
+                // O updateString quando você quiser, por exemplo, dar um rollback quando você quiser desfazer as alterações ao invés de 
+                // você tentar setar digamos você mudou de ideia e quer setar para toLowerCase ou você queira voltar quando você tiver esse
+                // caso você tem que utilizar o cancelRowUpdates e ele só pode ser utilizado antes do updateRow e uma vez que você utilizou
+                // updateRow não tem mais como você cancelar o update
+                // Então, sempre que você quiser voltar o estado utilize cancelRowUpdates ao invés de você tentar pegar o valor que está no
+                // banco de dados, por exemplo, não utilize updateString duas vezes
+                rs.updateString("name", rs.getString("name").toUpperCase());
+
+                // rs.cancelRowUpdates();
+
+                // Enquanto você não utiliza o updateRow ele não vai estar atualizando, então todas as vezes que você estiver utilizando o
+                // updateString você tem que lembrar de utilizar o updateRow porque se não não vai ser persistido no banco de dados e outra
+                // coisa importante também é que quando você está fazendo a atualização não é necessário você criar um novo sql
+                rs.updateRow();
+                Producer producer = Producer
+                        .builder()
+                        .id(rs.getInt("id"))
+                        .name(rs.getString("name"))
+                        .build();
+                producers.add(producer);
+            }
+        } catch (SQLException e) {
+            log.error("Error while trying to find producer by name", e);
+        }
+
+        return producers;
+    }
+
+    // Nós vamos procurar pelo nome e se não existir nós vamos inserir
+    public static List<Producer> findByNameAndInsertWhenNotFound(String name) {
+        log.info("Finding Producers by name");
+        String sql = "SELECT * FROM anime_store.producer WHERE name LIKE '%s';".formatted("%" + name + "%");
+        List<Producer> producers = new ArrayList<>();
+        try (Connection conn = ConnectionFactory.getConnection();
+             Statement stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
+             ResultSet rs = stmt.executeQuery(sql)) {
+            // Para deixar o código mais limpo o que poderíamos fazer é
+            if (rs.next()) {
+                return producers;
+            }
+
+            insertNewProducer(name, rs);
+
+            // Depois de inserir para pegar esse cara a gente pode fazer
+            Producer producer = getProducer(rs);
+
+            // Se você quisesse deletar é bem simples basta utilizar deleteRow e você não precisa persistir porque o
+            // deleteRow ele literalmente deleta direto não tem o que você fazer
+
+            producers.add(producer);
+
+            // E aí vou fazer o seguinte se o next for igual a falso, ou seja, significa que se não tiver o próximo o que
+            // eu quero fazer? Eu quero inserir e como a gente faz pra inserir?
+            // if (!rs.next()) {
+            //     // Primeiro preciso mover o cursor para uma linha temporária
+            //     rs.moveToInsertRow();
+
+            //     // Depois que eu mover para essa linha o que eu quero fazer? Na coluna name vou adicionar o name que procuramos
+            //     // aqui
+            //     rs.updateString("name", name);
+
+            //     // Então, depois que você atualizou como a gente faz pra inserir? 
+            //     rs.insertRow();
+
+            //     // Depois de inserir para pegar esse cara a gente pode fazer
+            //     // Basicamente como não tinha nada a gente voltou para o primeiro
+            //     rs.beforeFirst();
+
+            //     rs.next();
+
+            //     Producer producer = Producer
+            //         .builder()
+            //         .id(rs.getInt("id"))
+            //         .name(rs.getString("name"))
+            //         .build();
+
+            //     producers.add(producer);
+            // }
+        } catch (SQLException e) {
+            log.error("Error while trying to find producer by name", e);
+        }
+        return producers;
+    }
+
+    public static void findByNameAndDelete(String name) {
+        log.info("Finding Producers by name");
+        String sql = "SELECT * FROM anime_store.producer WHERE name LIKE '%s';".formatted("%" + name + "%");
+        try (Connection conn = ConnectionFactory.getConnection();
+             Statement stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                log.info("Deleting '{}'", rs.getString("name"));
+                rs.deleteRow();
+            }
+        } catch (SQLException e) {
+            log.error("Error while trying to find producer by name", e);
+        }
+    }
+
+    private static void insertNewProducer(String name, ResultSet rs) throws SQLException {
+        // Primeiro preciso mover o cursor para uma linha temporária
+        rs.moveToInsertRow();
+
+        // Depois que eu mover para essa linha o que eu quero fazer? Na coluna name vou adicionar o name que procuramos
+        // aqui
+        rs.updateString("name", name);
+
+        // Então, depois que você atualizou como a gente faz pra inserir? 
+        rs.insertRow();
+    }
+
+    private static Producer getProducer(ResultSet rs) throws SQLException {
+        // Basicamente como não tinha nada a gente voltou para o primeiro
+        rs.beforeFirst();
+
+        rs.next();
+
+        Producer producer = Producer
+            .builder()
+            .id(rs.getInt("id"))
+            .name(rs.getString("name"))
+            .build();
+        return producer;
+    }
 }

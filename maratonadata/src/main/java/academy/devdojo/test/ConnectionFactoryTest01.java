@@ -1,5 +1,7 @@
 package academy.devdojo.test;
 
+import java.util.List;
+
 import academy.devdojo.dominio.Producer;
 import academy.devdojo.service.ProducerService;
 import lombok.extern.log4j.Log4j2;
@@ -18,7 +20,12 @@ public class ConnectionFactoryTest01 {
 //        List<Producer> producers = ProducerService.findByName("N");
 //        log.info("Producers found '{}'", producers);
         // ProducerService.showProducerMetaData();
-        ProducerService.showDriverMetaData();
+        // ProducerService.showDriverMetaData();
+        // ProducerService.showTypeScrollWorking();
+        // List<Producer> producers = ProducerService.findByNameAndUpdateToUpperCase("Deen");
+        // List<Producer> producers = ProducerService.findByNameAndInsertWhenNotFound("A-1 pictures");
+        // log.info("Producers found '{}'", producers);
+        ProducerService.findByNameAndDelete("A-1 pictures");
 
         // Cada log contém um tipo diferente de informações, então por exemplo log.debug
         // Lembre-se quando você coloca a sua aplicação em produção você geralmente não tem muito acesso você só tem
