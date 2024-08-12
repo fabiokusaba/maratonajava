@@ -76,6 +76,24 @@ public class ProducerRepository {
         }
     }
 
+    public static void updatePreparedStatement(Producer producer) {
+        try (Connection conn = ConnectionFactory.getConnection();
+            PreparedStatement ps = preparedStatementUpdate(conn, producer)) {
+            int rowsAffected = ps.executeUpdate();
+            log.info("Updated producer '{}', rows affected: '{}'", producer.getId(), rowsAffected);
+        } catch (SQLException e) {
+            log.error("Error while trying to update producer '{}'", producer.getId(), e);
+        }
+    }
+
+    private static PreparedStatement preparedStatementUpdate(Connection connection, Producer producer) throws SQLException {
+        String sql = "UPDATE `anime_store`.`producer` SET `name` = ? WHERE (`id` = ?);";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setString(1, producer.getName());
+        ps.setInt(2, producer.getId());
+        return ps;
+    }
+
     // O findAll é um metodo que vai trazer todos os dados do nosso banco, geralmente você não tem um findAll em bancos
     // de dados de verdade quando você coloca o seu aplicativo na produção porque isso literalmente vai trazer todos
     public static List<Producer> findAll() {
@@ -293,7 +311,7 @@ public class ProducerRepository {
 
                 // E você tem o isBeforeFirst e o isAfterLast por que que é importante? Porque digamos assim que você quer ir pra última
                 // posição e digamos que eu quero ir de baixo pra cima agora e como eu faço pra ir de baixo pra cima? Utilizando um while
-                // vou fazer rs.previous e vou imprimir todo mundo aqi
+                // vou fazer rs.previous e vou imprimir todos aqui
                 log.info("Last row? '{}'", rs.last());
                 log.info("-------------------------");
 
@@ -318,7 +336,7 @@ public class ProducerRepository {
 
     // Basicamente a gente vai procurar por um nome e o nome que a gente achar a gente vai fazer a atualização colocando ele em UpperCase
     // sem criar um novo sql
-    // O método fica da mesma forma, mas como nós estamos criando um Statement que vai fazer uma atualização no banco de dados lembre-se que
+    // O metodo fica da mesma forma, mas como nós estamos criando um Statement que vai fazer uma atualização no banco de dados lembre-se que
     // a gente precisa utilizar o ResultSet que é insensitive e updatable
     public static List<Producer> findByNameAndUpdateToUpperCase(String name) {
         log.info("Finding Producers by name");
@@ -455,5 +473,175 @@ public class ProducerRepository {
             .name(rs.getString("name"))
             .build();
         return producer;
+    }
+
+    // PreparedStatement ele basicamente é um Statement aonde a performance vai ser muito maior porque quando você está utilizando
+    // SQL normal e você manda para o banco de dados o banco de dados tem que checar se a sintaxe está correta, checar se o nome da
+    // tabela está correto, checar se as palavras as colunas que você tenha mandado estejam corretas, ou seja, tem vários passos que 
+    // podem ser adiantados diretamente na aplicação e esse é um dos pontos que o PreparedStatement ele te ajuda, então ele pré compila
+    // o seu SQL pra agilizar a sua query e outra coisa também ele dá uma proteçãozinha contra o que nós chamamos de SQL Injection
+
+    // Vamos mostrar o que é um SQL Injection, imagine aqui que a gente não teria o like a gente está procurando pelo nome e a gente só
+    // tem o %s
+    // Do jeito que nós desenvolvemos aqui o nosso repositório a gente está dando possibilidade para SQL Injection e como é que funciona
+    // o SQL Injection? Imagina que agora no meu findByName, isso é algo que está vindo do usuário e o usuário poderia descrever mais ou
+    // menos assim no input B or 'X' = 'X' e agora nós conseguimos obter todos os dados da nossa tabela, então um dos objetivos do
+    // PreparedStatement é você dar uma filtrada nesses caras
+
+    // Então como a gente trabalha com PreparedStament? Voltando aqui no nosso código a gente só precisa fazer algumas pequenas alterações
+    // A primeira trocamos a conexão para prepareStatement e você está vendo que aqui ele pede agora o SQL quando você passa o SQL para o
+    // PreparedStament e o PreparedStatement é um Statement por isso você tem aqui essa possibilidade de continuar utilizando polimorfismo
+    // deixando o Statement lá, mas queremos trocar aqui para PreparedStatement
+    // Mas, eu não quero executar a query dessa forma o que eu quero fazer? Antes de executar a query eu quero começar a fazer a proteção
+    // fazer a pré compilação desse valor que eu tenho aqui no SQL, então a primeira coisa que a gente vai fazer vai ser tirar o formatted
+    // e aqui onde tinha esse símbolo '%s' a gente tira e o name LIKE ? que é o que chamamos de wild card
+    // Agora que a gente tem essa ? como a gente faz para pegar os valores? A gente precisa antes de executar a nossa query nós precisamos
+    // setar o substituir os nossos wild cards e aqui as coisas começam a ficar um pouquinho complicadas porque você tem que executar a query
+    // de uma forma aonde o seu ResultSet vai estar aqui e ao mesmo tempo você precisa adicionar aqui o que nós chamamos de setString só que
+    // se você colocar um valor aqui você tem um problema porque você não pode utilizar chamadas dentro do try with resources, então a gente
+    // vai ter que fazer o seguinte colocar dentro do bloco try o setString e o nosso ResultSet
+    // Então, a gente está pré compilando o nosso PreparedStatement aonde você tem esse valor aqui, o índice sempre começa de 1, e ele vai
+    // substituir por esse name e temos um pequeno probleminha como é que a gente vai fechar esse ResultSet aqui? A gente pode extrair a
+    // complexidade de criar um PreparedStatement para um outro método porque o que importa é você ter um PreparedStatement criado aqui dentro
+    // do try
+    // Basicamente o PreparedStatement ele foi criado pra você ter essa proteçãozinha contra o SQL Injection e também pra ter uma melhor
+    // performance porque o SQL vai ser pré compilado pra você evitar também de ter que criar outro try with resources aninhado você coloca a
+    // resposanbilidade de criar o PreparedStatement em um outro método
+    public static List<Producer> findByNamePreparedStament(String name) {
+        log.info("Finding Producers by name");
+        List<Producer> producers = new ArrayList<>();
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement ps = preparedStatementFindByName(conn, name);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                Producer producer = Producer
+                        .builder()
+                        .id(rs.getInt("id"))
+                        .name(rs.getString("name"))
+                        .build();
+                producers.add(producer);
+            }
+        } catch (SQLException e) {
+            log.error("Error while trying to find producer by name", e);
+        }
+
+        return producers;
+    }
+
+    private static PreparedStatement preparedStatementFindByName(Connection connection, String name) throws SQLException {
+        String sql = "SELECT * FROM anime_store.producer WHERE name LIKE ?;";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setString(1, "%"+name+"%");
+        return ps;
+    }
+
+    // CallableStatement basicamente é uma versão mais especializada do PreparedStatement, mas a diferença é que o Callable ele vai
+    // executar procedures e functions a diferença é que functions precisa obrigatoriamente retornar um valor e stored procedures
+    // você tem a escolha entre retornar e não retornar determinado valor
+    // Então, aqui a gente vai criar uma stored procedure antigamente era bastante comum utilizar stored procedures hoje em dia não é
+    // tão frequente a sua utilização porque quando você coloca a regra de negócio no banco de dados as coisas geralmente tendem a ser
+    // mais complicadas de se dar manutenção
+    // Então, por que seria útil? Porque imagina que as vezes você tem umas tabelas com dados sensitivos e você não quer que as pessoas
+    // possam executar uma busca em todos os campos da tabela, então se você limitar falar que ninguém pode acessar a tabela e se você
+    // quiser fazer consulta ou inserção você faria diretamente via procedure, é mais uma coisa de como as coisas ficariam organizadas
+    public static List<Producer> findByNameCallableStament(String name) {
+        log.info("Finding Producers by name");
+        List<Producer> producers = new ArrayList<>();
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement ps = callableStatementFindByName(conn, name);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                Producer producer = Producer
+                        .builder()
+                        .id(rs.getInt("id"))
+                        .name(rs.getString("name"))
+                        .build();
+                producers.add(producer);
+            }
+        } catch (SQLException e) {
+            log.error("Error while trying to find producer by name", e);
+        }
+
+        return producers;
+    }
+
+    private static CallableStatement callableStatementFindByName(Connection connection, String name) throws SQLException {
+        String sql = "CALL anime_store.sp_get_producer_by_name(?);";
+        CallableStatement cs = connection.prepareCall(sql);
+        cs.setString(1, "%"+name+"%");
+        return cs;
+    }
+
+    // Transações basicamente é atomicidade no banco de dados, ou seja, ou você executa tudo ou você não executa nada, então tem
+    // casos que é extremamente útil imagina por exemplo que você está trabalhando com um banco de dados que trabalha com estoque
+    // e alguém faz uma compra de um monitor quando você faz a compra você tem vários passos você tem o monitor que precisa estar
+    // no estoque aí se alguém for fazer o pagamento o pagamento precisa ser bem sucedido e aquele monitor precisa sair do estoque
+    // ou seja, você tem vários passos que precisam ser feitos no banco de dados caso um deles dê errado você precisa voltar tudo
+    // ao estado original então isso é chamado de transação ou você faz tudo ou você não faz nada
+
+    // O que precisamos alterar aqui? Primeiro nós vamos receber uma lista de producers, ou seja, é tipo um patch save a gente vai
+    // mandar vários dados a gente quer que todos os dados sejam inseridos no banco ou eles não sejam inseridos no banco de dados
+    // caso um dê problema
+    public static void saveTransaction(List<Producer> producers) {
+        try (Connection conn = ConnectionFactory.getConnection()) {
+            // Como é que a gente fala pro banco não alterar? Porque por padrão o MySQL ele tem algo que nós chamamos de autocommit
+            // ou seja, toda vez que você executa esse execute basicamente você está falando pro banco olha pega esse SQL aí e insere
+            // só que o que acontece você tem 3 producers A, B e C mandou A pro banco salvou, mandou B pro banco salvou, mandou C pro
+            // banco deu exceção o que acontece? A e B já estão salvos, mas você não quer que A e B sejam salvos se um deles der problema
+            // então você precisa desativar isso e você desativa através da conexão setAutoCommit para falso, ou seja, eu não quero que
+            // o banco tome conta de salvar cada um dos SQLs que estou mandando quando você faz isso não importa que você chame o execute
+            // que ele não vai salvar
+            conn.setAutoCommit(false);
+            preparedStatementSaveTransaction(conn, producers);
+
+            // Precisamos falar que depois que você termina de fazer toda a transação você comit
+            conn.commit();
+
+            // A propósito se você estivesse trabalhando num método maior uma vez que você seta o AutoCommit pra falso você precisa voltar
+            // ele para true por conexão
+            conn.setAutoCommit(true);
+        } catch (SQLException e) {
+            log.error("Error while trying to save producers '{}'", producers, e);
+        }
+    }
+
+    // Então, eu preciso não montar só um, mas montar vários PreparedStatement preciso executar eles e caso algum dê problema eu
+    // preciso voltar todo mundo, por isso não posso ter o PreparedStatement no saveTransaction porque eu preciso dele dentro de
+    // um loop, mas você não quer criar uma conexão para cada um dos producers que você quer salvar você cria uma conexão e você
+    // reusa essa conexão até você finalizar esse método, na verdade você precisa de um pool de conexões você não pode ficar
+    // criando conexões aleatórias assim porque se não você extoura o limite do banco de dados, mas geralmente quando você está
+    // trabalhando com Java existem alguns frameworks que fazem isso pra você
+    private static void preparedStatementSaveTransaction(Connection conn, List<Producer> producers) throws SQLException {
+        String sql = "INSERT INTO `anime_store`.`producer` (`name`) VALUES (?);";
+        boolean shouldRollback = false;
+
+        // Iterando sobre todos os producers que nós tivermos
+        for (Producer p : producers) {
+            // Aqui dentro precisamos criar o PreparedStatement, mas nós também precisamos fechá-lo então para isso usamos um
+            // try with resources
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                log.info("Saving producer '{}'", p.getName());
+
+                // Para cada um deles estou setando o nome
+                ps.setString(1, p.getName());
+
+                if (p.getName().equals("White Fox")) {
+                    throw new SQLException("Can't save white fox");
+                }
+
+                // Depois que eu seto o nome o que eu quero fazer? Então, estou criando cada um dos producers que estou passando
+                // aqui dentro desse for
+                ps.execute();
+            } catch (SQLException e) {
+                e.printStackTrace();
+                shouldRollback = true;
+            }
+        }
+        if (shouldRollback) {
+            log.warn("Transaction is going to be rollkack");
+            conn.rollback();
+        }
     }
 }

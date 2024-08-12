@@ -10,7 +10,7 @@ import lombok.extern.log4j.Log4j2;
 public class ConnectionFactoryTest01 {
     public static void main(String[] args) {
         Producer producer = Producer.builder().name("Studio Deen").build();
-        Producer producerToUpdate = Producer.builder().id(1).name("MADHOUSE").build();
+        Producer producerToUpdate = Producer.builder().id(1).name("madhouse").build();
 
         // Não é uma boa prática acessar o repositório diretamente, então eu vou acessar agora através do nosso service
     //    ProducerService.save(producer);
@@ -25,7 +25,12 @@ public class ConnectionFactoryTest01 {
         // List<Producer> producers = ProducerService.findByNameAndUpdateToUpperCase("Deen");
         // List<Producer> producers = ProducerService.findByNameAndInsertWhenNotFound("A-1 pictures");
         // log.info("Producers found '{}'", producers);
-        ProducerService.findByNameAndDelete("A-1 pictures");
+        // ProducerService.findByNameAndDelete("A-1 pictures");
+        // List<Producer> producers = ProducerService.findByNamePreparedStatement("Bo");
+        // log.info("Producers found '{}'", producers);
+        // ProducerService.updatePreparedStatement(producerToUpdate);
+        List<Producer> producers = ProducerService.findByNameCallableStatement("Bo");
+        log.info("Producers found '{}'", producers);
 
         // Cada log contém um tipo diferente de informações, então por exemplo log.debug
         // Lembre-se quando você coloca a sua aplicação em produção você geralmente não tem muito acesso você só tem
